@@ -17,7 +17,17 @@
 #include <OpenGL/glu.h>
 #include "glut.h"
 
-#include "CarouselHorse0.10.550.h"
+#define XSIDE	10				// length of the x side of the grid
+#define X0      (-XSIDE/2.)		// where one side starts
+#define NX		500				// how many points in x
+#define DX		( XSIDE/(float)NX )	// change in x between the points
+
+#define YGRID	0.f
+
+#define ZSIDE	10				// length of the z side of the grid
+#define Z0      (-ZSIDE/2.)		// where one side starts
+#define NZ		500				// how many points in z
+#define DZ		( ZSIDE/(float)NZ )	// change in z between the points
 
 //	This is a sample OpenGL / GLUT program
 //
@@ -39,7 +49,7 @@
 
 // title of these windows:
 
-const char *WINDOWTITLE = "OpenGL / GLUT Sample -- Hla Htun";
+const char *WINDOWTITLE = "OpenGL -- Hla Htun";
 const char *GLUITITLE   = "User Interface Window";
 
 // what the glui package defines as true and false:
@@ -225,11 +235,19 @@ float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
 float			Unit(float [3]);
 
-// project 1 calls needed
-GLuint WireHorseList;
-GLuint HorseList;
-void drawCircle( );
-int currentViewMode; // 0 for Outside, 1 for Inside
+// Hla's variables
+bool 	Frozen;
+bool	IsSpotLight;
+float	h_r = 1.0;
+float	h_g = 1.0;
+float	h_b = 1.0;
+int 	currentViewMode; // 0 for Outside View, 1 for Inside View
+int 	DogDL;
+int		CowDL;
+int		CatDL;
+GLuint 	GridDL;
+GLuint	H_Sphere;
+// GLuint 	H_Light;
 
 // utility to create an array from 3 separate values:
 
@@ -275,16 +293,28 @@ MulArray3(float factor, float a, float b, float c )
 
 // these are here for when you need them -- just uncomment the ones you need:
 
-//#include "setmaterial.cpp"
-//#include "setlight.cpp"
-//#include "osusphere.cpp"
-//#include "osucone.cpp"
-//#include "osutorus.cpp"
-//#include "bmptotexture.cpp"
-//#include "loadobjfile.cpp"
-//#include "keytime.cpp"
-//#include "glslprogram.cpp"
+#include "setmaterial.cpp"
+#include "setlight.cpp"
+// #include "osusphere.cpp"
+// #include "osucone.cpp"
+// #include "osutorus.cpp"
+// #include "bmptotexture.cpp"
+#include "loadobjfile.cpp"
+#include "keytime.cpp"
+// #include "glslprogram.cpp"
 
+
+// project4 keytime variables
+Keytimes Xpos1;
+Keytimes Xlight1;
+Keytimes XYZscale1;
+Keytimes Xview1;
+Keytimes Yview1;
+Keytimes Rcolor1;
+Keytimes Gcolor1;
+Keytimes Xrotate1;
+
+const int MSEC = 10000;
 
 // main program:
 
@@ -373,15 +403,23 @@ Display( )
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 	glEnable( GL_DEPTH_TEST );
-#ifdef DEMO_DEPTH_BUFFER
-	if( DepthBufferOn == 0 )
-		glDisable( GL_DEPTH_TEST );
-#endif
 
+	#ifdef DEMO_DEPTH_BUFFER
+		if( DepthBufferOn == 0 )
+			glDisable( GL_DEPTH_TEST );
+	#endif
+
+	// turn # msec into the cycle ( 0 - MSEC-1 ):
+	int msec = glutGet( GLUT_ELAPSED_TIME )  %  MSEC;
+
+	// turn that into a time in seconds:
+	float nowTime = (float)msec  / 1000.;
+	fprintf( stderr, "nowTime = %f\n", nowTime );
 
 	// specify shading to be flat:
 
-	glShadeModel( GL_FLAT );
+	// glShadeModel( GL_FLAT );
+	glShadeModel( GL_SMOOTH );
 
 	// set the viewport to be a square centered in the window:
 
@@ -410,20 +448,18 @@ Display( )
 	glLoadIdentity( );
 
 	// set the eye position, look-at position, and up-vector:
-	if (currentViewMode == 1){}
-	else if (currentViewMode == 0){
-		// rotate the scene:
-		
-		gluLookAt( 1.f, 1.f, 4.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
-		glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
-		glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
+	
+	// gluLookAt( 1.f, 1.f, 4.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
+	// keytime animation used for eye position
+	gluLookAt( 1.f, 1.f, 4.f, -Xview1.GetValue( nowTime ), Yview1.GetValue( nowTime ), Xview1.GetValue( nowTime ), 0.f, 1.f, 0.f );
+	glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
+	glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
 
-		// uniformly scale the scene:
+	// uniformly scale the scene:
 
-		if( Scale < MINSCALE )
-			Scale = MINSCALE;
-		glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
-	}
+	if( Scale < MINSCALE )
+		Scale = MINSCALE;
+	glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
 	
 	// set the fog parameters:
 
@@ -445,28 +481,14 @@ Display( )
 
 	if( AxesOn != 0 )
 	{
-		glColor3fv( &Colors[NowColor][0] );
+		// glColor3fv( &Colors[NowColor][0] );
+		SetMaterial( 1., 1., 1., 100.f);
 		glCallList( AxesList );
 	}
 
 	// since we are using glScalef( ), be sure the normals get unitized:
 
 	glEnable( GL_NORMALIZE );
-
-	for (int i = 0; i < 271; i+=90){
-		glPushMatrix( );
-			glTranslatef(0.0f, deltaY, 0.0f); // Translate up and down
-			glRotatef(deltaAngle + i, 0.0f, 1.0f, 0.0f); // Revolve in a circle => 360.f*Time
-			glRotatef(deltaRockAngle, 1.0f, 0.0f, 0.0f); // Rock back and forth => 45.0f * sin(2 * M_PI * Time)
-			
-			// draw the horse object by calling up its display list
-			glCallList( HorseList );
-		glPopMatrix( );
-	}
-	
-	// draw the circle by calling up its display list
-	drawCircle();
-	
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -478,6 +500,48 @@ Display( )
 	}
 #endif
 
+	glEnable( GL_LIGHTING );
+	glEnable( GL_LIGHT0 );
+
+	if (IsSpotLight == true) {
+		// keytime animation for spotlight, pendulum-like motion
+		SetSpotLight( GL_LIGHT0, 0., 0., 0., Xlight1.GetValue( nowTime ), -5.0, Xlight1.GetValue( nowTime ), h_r, h_g, h_b );	
+	}
+	else {
+		// keytime animation for pointlight, change color (red and green) of the point light 
+		SetPointLight( GL_LIGHT0, deltaY, 2., 0., Rcolor1.GetValue( nowTime ), Gcolor1.GetValue( nowTime ), 1.0 );	
+	}
+
+	glPushMatrix( );
+		glTranslatef(0., -2, 1.);
+		glCallList( GridDL );
+	glPopMatrix( );
+
+	glPushMatrix( );
+		glTranslatef( 0., 0.5, -1.5 );
+		glRotatef( 90., 1, 0., 0.);
+		glCallList( GridDL );
+	glPopMatrix( );
+
+	glPushMatrix( );
+		// keytime animation for rotating on x i.e., doing backflips
+		glRotatef( Xrotate1.GetValue( nowTime ), 1., 0., 0. );
+
+		// keytime animation for moving up and down
+		glTranslatef( 0., Xpos1.GetValue( nowTime ), 0. );
+
+		// keytime animation for scaling 
+		glScalef( XYZscale1.GetValue( nowTime ), XYZscale1.GetValue( nowTime ), XYZscale1.GetValue( nowTime ) );
+
+		// keytime animation for object color. setting red and blue
+		SetMaterial( Rcolor1.GetValue( nowTime ), Gcolor1.GetValue( nowTime ), 0., 100.f);
+
+		glCallList( DogDL );
+	glPopMatrix( );
+
+	
+	
+	// glDisable( GL_LIGHT0 );
 
 	// draw some gratuitous text that just rotates on top of the scene:
 	// i commented out the actual text-drawing calls -- put them back in if you have a use for them
@@ -810,6 +874,111 @@ InitGraphics( )
 
 	glutIdleFunc( Animate );
 
+	// move upwards (y) rapidly and slow down in descend before moving 1.0 up rapidly and going back to 0
+	Xpos1.Init( );
+	Xpos1.AddTimeValue(  0.0,  0.000 );
+	Xpos1.AddTimeValue(  1.0,  1.0 );
+	Xpos1.AddTimeValue(  2.0,  1.5 );
+	Xpos1.AddTimeValue(  3.0,  2.5 );
+	Xpos1.AddTimeValue(  4.0,  2.000 );
+	Xpos1.AddTimeValue(  5.5,  1.5 );
+	Xpos1.AddTimeValue(  6.0,  1.0 );
+	Xpos1.AddTimeValue(  7.0,  0.5 );
+	Xpos1.AddTimeValue(  8.0,  0.0 );
+	Xpos1.AddTimeValue(  9.0,  1.000 );
+	Xpos1.AddTimeValue(  10.0,  0.000 );
+
+	// pendulum-like motion
+	Xlight1.Init( );
+	Xlight1.AddTimeValue(  0.0,  0.000 );
+	Xlight1.AddTimeValue(  1.0,  2.5 );
+	Xlight1.AddTimeValue(  2.0,  0.000 );
+	Xlight1.AddTimeValue(  3.0,  -2.5 );
+	Xlight1.AddTimeValue(  5.0,  0.000 );
+	Xlight1.AddTimeValue(  6.0,  2.5 );
+	Xlight1.AddTimeValue(  7.0,  0.000 );
+	Xlight1.AddTimeValue(  8.0,  -2.5 );
+	Xlight1.AddTimeValue( 10.0,  0.000 );
+
+	// Move along x-axis within 0 and 1, slowly ( don't want a lot of movement )
+	Xview1.Init( );
+	Xview1.AddTimeValue( 0.0, 0.000 );
+	Xview1.AddTimeValue( 1.0, 0.5 );
+	Xview1.AddTimeValue( 2.0, 1.0 );
+	Xview1.AddTimeValue( 3.0, 0.750 );
+	Xview1.AddTimeValue( 4.0, 0.500 );
+	Xview1.AddTimeValue( 5.0, 0.000 );
+	Xview1.AddTimeValue( 6.0, 0.25 );
+	Xview1.AddTimeValue( 7.0, 0.5 );
+	Xview1.AddTimeValue( 8.0, 1.0 );
+	Xview1.AddTimeValue( 9.0, 0.5 );
+	Xview1.AddTimeValue( 10.0, 0.000 );
+
+	// Move along y-axis within -0.5 and 1, slowly ( don't want a lot of movement )
+	Yview1.Init( );
+	Yview1.AddTimeValue( 0.0, 0.000 );
+	Yview1.AddTimeValue( 2.0, 0.5 );
+	Yview1.AddTimeValue( 4.0, 1.0 );
+	Yview1.AddTimeValue( 6.0, 0.5 );
+	Yview1.AddTimeValue( 8.0, 0.0 );
+	Yview1.AddTimeValue( 9.0, -0.5 );
+	Yview1.AddTimeValue( 10.0, -0.25 );
+
+	// change red color from 0 to 1 and back from 1 to 0 
+	Rcolor1.Init( );
+	Rcolor1.AddTimeValue( 0.0, 0.000 );
+	Rcolor1.AddTimeValue( 1.0, 0.25 );
+	Rcolor1.AddTimeValue( 2.0, 0.50 );
+	Rcolor1.AddTimeValue( 3.0, 0.75 );
+	Rcolor1.AddTimeValue( 4.0, 1.000 );
+	Rcolor1.AddTimeValue( 5.0, 0.75 );
+	Rcolor1.AddTimeValue( 6.0, 0.50 );
+	Rcolor1.AddTimeValue( 7.0, 0.25 );
+	Rcolor1.AddTimeValue( 8.0, 0.000 );
+	Rcolor1.AddTimeValue( 9.0, 0.000 );
+	Rcolor1.AddTimeValue( 10.0, 0.000 );
+
+	// change green color from 1 to 0 and back from 0 to 1
+	Gcolor1.Init( );
+	Gcolor1.AddTimeValue( 0.0, 1.000 );
+	Gcolor1.AddTimeValue( 1.0, 0.75 );
+	Gcolor1.AddTimeValue( 2.0, 0.50 );
+	Gcolor1.AddTimeValue( 3.0, 0.25 );
+	Gcolor1.AddTimeValue( 4.0, 0.000 );
+	Gcolor1.AddTimeValue( 5.0, 0.25 );
+	Gcolor1.AddTimeValue( 6.0, 0.50 );
+	Gcolor1.AddTimeValue( 7.0, 0.75 );
+	Gcolor1.AddTimeValue( 8.0, 1.000 );
+	Gcolor1.AddTimeValue( 9.0, 0.000 );
+	Gcolor1.AddTimeValue( 10.0, 0.000 );
+
+	// backflip-like animation
+	Xrotate1.Init( );
+	Xrotate1.AddTimeValue( 0.0, 0.000 );
+	Xrotate1.AddTimeValue( 1.5, 45.0 );
+	Xrotate1.AddTimeValue( 3.0, 90.000 );
+	Xrotate1.AddTimeValue( 4.5, 135.000 );
+	Xrotate1.AddTimeValue( 5.5, 180.000 );
+	Xrotate1.AddTimeValue( 6.5, 225.000 );
+	Xrotate1.AddTimeValue( 7.5, 270.000 );
+	Xrotate1.AddTimeValue( 8.5, 310.000 );
+	Xrotate1.AddTimeValue( 9.5, 360.000 );
+	Xrotate1.AddTimeValue( 10.0, 0.00 );
+
+	// scale it from 0. to 0.3 (dog object is already big)
+	XYZscale1.Init( );
+	XYZscale1.AddTimeValue( 0.0, 0.000 );
+	XYZscale1.AddTimeValue( 1.0, 0.05 );
+	XYZscale1.AddTimeValue( 2.0, 0.1 );
+	XYZscale1.AddTimeValue( 3.0, 0.150 );
+	XYZscale1.AddTimeValue( 4.0, 0.200 );
+	XYZscale1.AddTimeValue( 5.0, 0.250 );
+	XYZscale1.AddTimeValue( 6.0, 0.300 );
+	XYZscale1.AddTimeValue( 7.0, 0.250 );
+	XYZscale1.AddTimeValue( 8.0, 0.20 );
+	XYZscale1.AddTimeValue( 9.0, 0.1500 );
+	XYZscale1.AddTimeValue( 10.0, 0.100 );
+
 	// init the glew package (a window must be open to do this):
 
 #ifdef WIN32
@@ -827,88 +996,87 @@ InitGraphics( )
 
 }
 
-
-void drawHorse( )
-{
-	// Wire Horse
-
-	// WireHorseList = glGenLists( 1 );
-	// glNewList( WireHorseList, GL_COMPILE );
-	// 	glPushMatrix( );
-	// 		glScalef(0.5f, 0.5f, 0.5f);	
-	// 		glTranslatef( 4.f, -1.1f, 0.f);
-	// 		glRotatef(180.f, 0., 1., 0.);
-	// 		// glRotatef(90.f, 0., 1., 0.);
-	// 		// glTranslatef( 0., -1.1f, 0.f);
-
-			
-	// 		// glColor3f( 1.f, 1.f, 0.f);	// yellow
-	// 		glBegin( GL_LINES );
-	// 			for( int i=0; i < HORSEnedges; i++ )
-	// 			{
-	// 				struct point p0 = HORSEpoints[ HORSEedges[i].p0 ];
-	// 				struct point p1 = HORSEpoints[ HORSEedges[i].p1 ];
-	// 				glVertex3f( p0.x, p0.y, p0.z );
-	// 				glVertex3f( p1.x, p1.y, p1.z );
-	// 			}
-	// 		glEnd( );
-	// 	glPopMatrix( );
-	// glEndList( );
-
-	// Polygonal Horse
-	HorseList = glGenLists( 1 );
-	glNewList( HorseList, GL_COMPILE );
-		glPushMatrix( );
-			glScalef(0.5f, 0.5f, 0.5f);
-			glTranslatef( 4.f, -1.1f, 0.f);
-			glRotatef(180.f, 0., 1., 0.);
-
-			glBegin( GL_TRIANGLES );
-				for( int i = 0; i < HORSEntris; i++ )
-				{
-					struct point p0 = HORSEpoints[ HORSEtris[i].p0 ];
-					struct point p1 = HORSEpoints[ HORSEtris[i].p1 ];
-					struct point p2 = HORSEpoints[ HORSEtris[i].p2 ];
-
-					// fake "lighting" from above:
-
-					float p01[3], p02[3], n[3];
-					p01[0] = p1.x - p0.x;
-					p01[1] = p1.y - p0.y;
-					p01[2] = p1.z - p0.z;
-					p02[0] = p2.x - p0.x;
-					p02[1] = p2.y - p0.y;
-					p02[2] = p2.z - p0.z;
-					Cross( p01, p02, n );
-					Unit( n, n );
-					n[1] = (float)fabs( n[1] );
-					// simulating a glColor3f( 1., 1., 0. ) = yellow:
-					glColor3f( 1.f*n[1], 1.f*n[1], 0.f*n[1]);
-
-					glVertex3f( p0.x, p0.y, p0.z );
-					glVertex3f( p1.x, p1.y, p1.z );
-					glVertex3f( p2.x, p2.y, p2.z );
-				}
-			glEnd( );
-		glPopMatrix( );
-	glEndList( );
-}
-
-void drawCircle( )
-{
-	glBegin(GL_LINE_LOOP);
-		for(int i = 0; i < 100; i++) {
-			float theta = 2.0f * M_PI * float(i) / float(100);
-			float x = 2.0f * cos(theta);
-			float z = 2.0f * sin(theta);
-			glVertex3f(x, 0.0f, z);
-		}
-	glEnd();
-}
-
 void switchViewMode( ) 
 {
     currentViewMode = (currentViewMode + 1) % 2; // Toggle between 0 and 1
+}
+
+// draws the grid
+void drawGrid( )
+{
+	GridDL = glGenLists( 1 );
+	glNewList( GridDL, GL_COMPILE );
+			glScalef(0.5, 0.5, 0.5);
+			SetMaterial( 0.6f, 0.6f, 0.6f, 30.f );
+			SetPointLight(0, 0.5, .5, .5, 1., 1., 1.);
+			glNormal3f( 0., 1., 0. );
+			for( int i = 0; i < NZ; i++ )
+			{
+					glBegin( GL_QUAD_STRIP );
+					for( int j = 0; j < NX; j++ )
+					{
+							glVertex3f( X0 + DX*(float)j, YGRID, Z0 + DZ*(float)(i+0) );
+							glVertex3f( X0 + DX*(float)j, YGRID, Z0 + DZ*(float)(i+1) );
+					}
+					glEnd( );
+			}
+	glEndList( );
+}
+
+void drawDog( )
+{	
+	DogDL = glGenLists( 1 );
+	glNewList( DogDL, GL_COMPILE );
+		// SetMaterial(10., 10., 10., 100.f);
+		LoadObjFile( (char *)"dog.obj" );
+	glEndList( );
+
+}
+
+void drawCow( )
+{
+	CowDL = glGenLists( 1 );
+	glNewList( CowDL, GL_COMPILE );
+		SetMaterial(0., 1., 0., 50.f);
+		LoadObjFile( (char *)"cow.obj" );
+	glEndList( );
+}
+
+void drawCat( )
+{
+	CatDL = glGenLists( 1 );
+	glNewList( CatDL, GL_COMPILE );
+		SetMaterial(0., 0., 1., 0.f);
+		LoadObjFile( (char *)"cat.obj" );
+	glEndList( );
+}
+
+void drawSphere( float radius, int stacks, int slices )
+{
+	H_Sphere = glGenLists( 1 );
+	glNewList( H_Sphere, GL_COMPILE );
+		glDisable( GL_LIGHTING );
+		for (int i = 0; i < stacks; ++i) {
+			float theta1 = (float)i * M_PI / stacks;
+			float theta2 = (float)(i + 1) * M_PI / stacks;
+
+			glBegin(GL_QUAD_STRIP);
+			for (int j = 0; j <= slices; ++j) {
+				float phi = (float)j * 2.0f * M_PI / slices;
+				float x = radius * sin(theta1) * cos(phi);
+				float y = radius * sin(theta1) * sin(phi);
+				float z = radius * cos(theta1);
+				glVertex3f(x, y, z);
+
+				x = radius * sin(theta2) * cos(phi);
+				y = radius * sin(theta2) * sin(phi);
+				z = radius * cos(theta2);
+				glVertex3f(x, y, z);
+			}
+			glEnd();
+		}
+		glEnable( GL_LIGHTING );
+	glEndList( );
 }
 
 // initialize the display lists that will not change:
@@ -926,8 +1094,11 @@ InitLists( )
 	float dz = BOXSIZE / 2.f;
 	glutSetWindow( MainWindow );
 
-	drawCircle( );
-	drawHorse( );
+	drawGrid( );
+	drawSphere( 1.0, 20, 20 );
+	drawDog( );
+	drawCow( );
+	drawCat( );
 
 
 	// create the axes:
@@ -958,7 +1129,14 @@ Keyboard( unsigned char c, int x, int y )
 
 		case 'p':
 		case 'P':
-			NowProjection = PERSP;
+			// NowProjection = PERSP;
+			IsSpotLight = false;
+			break;
+
+		case 's':
+		case 'S':
+			// NowProjection = PERSP;
+			IsSpotLight = true;
 			break;
 
 		case 'q':
@@ -966,6 +1144,50 @@ Keyboard( unsigned char c, int x, int y )
 		case ESCAPE:
 			DoMainMenu( QUIT );	// will not return here
 			break;				// happy compiler
+		
+		case 'f':
+		case 'F':
+			Frozen = ! Frozen;
+			if( Frozen )
+				glutIdleFunc( NULL );
+			else
+				glutIdleFunc( Animate );
+			break;
+
+		case 'w':
+		case 'W':
+			h_r = 1.0;
+			h_g = 1.0;
+			h_b = 1.0;
+			break;
+
+		case 'r':
+		case 'R':
+			h_r = 1.0;
+			h_g = 0.0;
+			h_b = 0.0;
+			break;
+		
+		case 'g':
+		case 'G':
+			h_r = 0.0;
+			h_g = 1.0;
+			h_b = 0.0;
+			break;
+		
+		case 'b':
+		case 'B':
+			h_r = 0.0;
+			h_g = 0.0;
+			h_b = 1.0;
+			break;
+		
+		case 'y':
+		case 'Y':
+			h_r = 1.0;
+			h_g = 1.0;
+			h_b = 0.0;
+			break;
 
 		case '0':
             currentViewMode = 0; // Set to Outside view
@@ -1098,6 +1320,7 @@ Reset( )
 	NowColor = YELLOW;
 	NowProjection = PERSP;
 	Xrot = Yrot = 0.;
+	Frozen = false;
 }
 
 

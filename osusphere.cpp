@@ -4,7 +4,7 @@
 #include <math.h>
 #include <ctype.h>
 
-#include <GL/gl.h>
+// #include <GL/gl.h>
 
 #ifndef F_PI
 #define F_PI		((float)(M_PI))
